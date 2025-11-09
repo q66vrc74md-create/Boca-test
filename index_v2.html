@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>영어 단어 테스트지 생성기</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tesseract.js OCR 라이브러리 (브라우저용) -->
+  <script src="https://unpkg.com/tesseract.js@v6.0.0/dist/tesseract.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans KR",
+        sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #0f172a;
+      color: #e5e7eb;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 4px;
+      font-size: 1.4rem;
+    }
+
+    p {
+      margin-top: 0;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+      color: #cbd5f5;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    input[type="file"] {
+      color: #e5e7eb;
+      font-size: 0.8rem;
+      max-width: 230px;
+    }
+
+    button {
+      padding: 7px 13px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(37, 99, 235, 0.9);
+      color: white;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: rgba(30, 64, 175, 1);
+    }
+
+    #status {
+      font-size: 0.85rem;
+      margin-top: 6px;
+      margin-bottom: 10px;
+      color: #e5e7eb;
+    }
+
+    #previewWrapper {
+      margin: 8px auto 12px;
+      max-width: 320px;
+    }
+
+    #preview {
+      display: none;
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .raw-box {
+      margin: 6px auto 16px;
+      max-width: 420px;
+      text-align: left;
+      font-size: 0.8rem;
+      color: #cbd5f5;
+    }
+
+    .raw-box textarea {
+      width: 100%;
+      min-height: 80px;
+      resize: vertical;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 0.8rem;
+      padding: 6px 8px;
+      outline: none;
+    }
+
+    .raw-box textarea:focus {
+      border-color: #60a5fa;
+    }
+
+    .mini-btn {
+      margin-top: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .mini-btn:hover {
+      background: rgba(37, 99, 235, 0.9);
+    }
+
+    .date-input {
+      margin-bottom: 10px;
+      font-size: 0.85rem;
+    }
+
+    .date-input input {
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 0.8rem;
+    }
+
+    /* A4 테스트지 영역 */
+    #testSheet {
+      width: 210mm;
+      height: 297mm;
+      background: white;
+      color: #111827;
+      margin: 16px auto;
+      border: 1px solid #e5e7eb;
+      box-sizing: border-box;
+      padding: 0 20mm 20mm 20mm; /* 좌/우/아래 2cm */
+    }
+
+    #dateRow {
+      margin-top: 30mm; /* 위에서 3cm */
+      margin-bottom: 20mm; /* 날짜와 표 사이 2cm */
+      text-align: center;
+      font-size: 11pt;
+    }
+
+    #testSheet table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    #testSheet td {
+      border: 1px solid #d1d5db;
+      height: 8mm; /* 대략 25줄 맞추기 */
+      padding: 2px 4px;
+      font-size: 10pt;
+      vertical-align: middle;
+    }
+
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      .controls,
+      #previewWrapper,
+      #status,
+      .raw-box,
+      .date-input {
+        display: none !important;
+      }
+      #testSheet {
+        border: none;
+        margin: 0;
+        width: 210mm;
+        height: 297mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>📘 영어 단어 테스트지 생성기</h1>
+  <p>단어·뜻이 적힌 이미지를 올리면, 랜덤 테스트지를 만들어 A4로 인쇄할 수 있어.</p>
+
+  <div class="controls">
+    <input type="file" id="imageInput" accept="image/*" />
+    <button id="shuffleBtn">랜덤으로 섞기</button>
+    <button id="ver1Btn">영어단어 테스트지 (버전1)</button>
+    <button id="ver2Btn">한글해석 테스트지 (버전2)</button>
+    <button id="printBtn">프린트</button>
+  </div>
+
+  <div id="status">📷 먼저 단어 이미지 파일을 선택해줘.</div>
+
+  <div id="previewWrapper">
+    <img id="preview" alt="업로드된 이미지 미리보기" />
+  </div>
+
+  <div class="raw-box">
+    <div style="margin-bottom:4px;">🔍 인식된 원본 텍스트 (자동 추출 결과 확인용, 필요하면 여기서 직접 수정 가능)</div>
+    <textarea id="rawText" placeholder="이미지를 올리면 여기 OCR 결과가 보여. (한 줄에 '영어단어 한글뜻' 형식이 좋음)"></textarea>
+    <button id="parseBtn" class="mini-btn">텍스트에서 단어 다시 읽기</button>
+  </div>
+
+  <div class="date-input">
+    인쇄될 날짜:
+    <input type="date" id="dateInput" />
+  </div>
+
+  <div id="testSheet">
+    <!-- JS가 여기에 날짜 + 표를 그려줌 -->
+  </div>
+
+  <script>
+    const imageInput = document.getElementById("imageInput");
+    const preview = document.getElementById("preview");
+    const statusText = document.getElementById("status");
+    const rawText = document.getElementById("rawText");
+    const dateInput = document.getElementById("dateInput");
+    const testSheet = document.getElementById("testSheet");
+
+    const shuffleBtn = document.getElementById("shuffleBtn");
+    const ver1Btn = document.getElementById("ver1Btn");
+    const ver2Btn = document.getElementById("ver2Btn");
+    const printBtn = document.getElementById("printBtn");
+    const parseBtn = document.getElementById("parseBtn");
+
+    let vocabList = [];   // [{ eng: 'apple', kor: '사과' }, ...]
+    let shuffledList = []; // 섞인 배열
+
+    function isHangul(str) {
+      return /^[가-힣]+$/.test(str);
+    }
+
+    // 한국어 OCR에서 '사 과를 먹는 다' 같은 걸 '사과를 먹는다'로 어느 정도 복원
+    function fixKoreanSpacing(str) {
+      const tokens = str.split(/\s+/).filter(t => t.length > 0);
+      const merged = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const cur = tokens[i];
+        const next = tokens[i + 1];
+        if (
+          next &&
+          isHangul(cur.replace(/[^가-힣]/g, "")) &&
+          isHangul(next.replace(/[^가-힣]/g, "")) &&
+          (cur.replace(/[^가-힣]/g, "").length === 1 ||
+            next.replace(/[^가-힣]/g, "").length === 1)
+        ) {
+          merged.push(cur + next);
+          i++;
+        } else {
+          merged.push(cur);
+        }
+      }
+      return merged.join(" ");
+    }
+
+    // rawText에 있는 텍스트를 기준으로 단어/뜻 다시 파싱
+    function parseFromRaw() {
+      const text = rawText.value || "";
+      const lines = text.split(/\r?\n/);
+      const parsed = [];
+
+      for (let line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // 맨 앞 영어단어 추출
+        const match = trimmed.match(/^[A-Za-z][A-Za-z'’-]*/);
+        if (!match) continue;
+
+        const eng = match[0];
+        let rest = trimmed.slice(match[0].length).trim();
+        if (!rest) continue;
+
+        const kor = fixKoreanSpacing(rest);
+        parsed.push({ eng, kor });
+      }
+
+      vocabList = parsed;
+      shuffledList = [...vocabList];
+      statusText.textContent = `✅ 텍스트에서 ${vocabList.length}개의 단어/뜻을 읽어 왔어.`;
+    }
+
+    parseBtn.addEventListener("click", () => {
+      if (!rawText.value.trim()) {
+        alert("텍스트 창이 비어 있어. 먼저 이미지에서 인식하거나 직접 입력해줘!");
+        return;
+      }
+      parseFromRaw();
+    });
+
+    imageInput.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // 미리보기
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = "block";
+
+      statusText.textContent = "🧠 이미지에서 글자를 인식 중...";
+
+      try {
+        const result = await Tesseract.recognize(file, "eng+kor", {
+          logger: (m) => {
+            if (m.status === "recognizing text") {
+              const p = Math.round((m.progress || 0) * 100);
+              statusText.textContent = `인식 중... ${p}%`;
+            }
+          },
+        });
+
+        const text = result.data.text || "";
+        rawText.value = text;
+
+        parseFromRaw();
+        statusText.textContent =
+          "✅ 이미지에서 단어를 읽어 왔어. 필요하면 아래 텍스트를 고친 뒤 '텍스트에서 단어 다시 읽기'를 눌러줘.";
+      } catch (err) {
+        console.error(err);
+        statusText.textContent =
+          "⚠️ 인식 중 오류가 발생했어. 이미지 글자가 너무 흐리거나, 언어 형식이 다를 수 있어.";
+      }
+    });
+
+    function shuffleArray(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    shuffleBtn.addEventListener("click", () => {
+      if (vocabList.length === 0) {
+        alert("먼저 단어가 있는 이미지를 올리거나, 텍스트에서 단어를 읽어줘!");
+        return;
+      }
+      shuffledList = shuffleArray(vocabList);
+      statusText.textContent = "🔀 단어/뜻 순서를 랜덤으로 섞었어!";
+    });
+
+    function makeSheet(version) {
+      if (shuffledList.length === 0) {
+        alert("먼저 단어를 읽고(이미지 or 텍스트), 필요하면 랜덤 섞기를 해줘!");
+        return;
+      }
+
+      const maxItems = Math.min(shuffledList.length, 50); // 25행 × 2열 = 50개
+      const list = shuffledList.slice(0, maxItems);
+
+      const rows = 25;
+      const cols = 4; // 1: 문제, 2: 답칸, 3: 문제, 4: 답칸
+
+      const selectedDate = dateInput.value;
+      const dateStr = selectedDate ? selectedDate : "________";
+
+      let html = "";
+      html += `<div id="dateRow">날짜: ${dateStr}</div>`;
+      html += "<table>";
+
+      for (let r = 0; r < rows; r++) {
+        html += "<tr>";
+        for (let c = 0; c < cols; c++) {
+          let cellText = "";
+          // 1번/3번 세로줄에만 문제(영단어 or 뜻)를 넣고, 2/4번은 빈칸(답 쓰는 공간)
+          if (c === 0 || c === 2) {
+            const baseIndex = c === 0 ? 0 : 25;
+            const idx = r + baseIndex;
+            if (idx < list.length) {
+              const pair = list[idx];
+              cellText = version === 1 ? pair.eng : pair.kor;
+            }
+          } else {
+            cellText = ""; // 답 적는 칸
+          }
+          html += `<td>${cellText}</td>`;
+        }
+        html += "</tr>";
+      }
+
+      html += "</table>";
+      testSheet.innerHTML = html;
+    }
+
+    ver1Btn.addEventListener("click", () => {
+      makeSheet(1); // 영어단어만
+      statusText.textContent =
+        "✏️ 버전1: 영어 단어만 들어간 테스트지를 만들었어.";
+    });
+
+    ver2Btn.addEventListener("click", () => {
+      makeSheet(2); // 한글 뜻만
+      statusText.textContent =
+        "✏️ 버전2: 한글 뜻만 들어간 테스트지를 만들었어.";
+    });
+
+    printBtn.addEventListener("click", () => {
+      if (!testSheet.innerHTML.trim()) {
+        alert("먼저 테스트지를 생성(버전1/2 버튼)한 뒤에 프린트해줘!");
+        return;
+      }
+      window.print();
+    });
+  </script>
+</body>
+</html>
